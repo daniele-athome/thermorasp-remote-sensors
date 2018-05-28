@@ -8,6 +8,7 @@ temperature (via DS18S20 or similar sensor) is supported.
 
 * ESP8266 board support (installable via Arduino IDE Library Manager)
 * [Modified OneWire+DallasTemperature](https://github.com/daniele-athome/OneWireNoResistor) (install the ESP8266 branch via ZIP file)
+* [Modified mDNSResolver](https://github.com/daniele-athome/mDNSResolver) (follow instructions in README)
 
 ## Build and installation
 

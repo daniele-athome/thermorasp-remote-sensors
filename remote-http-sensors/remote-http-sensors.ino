@@ -4,8 +4,10 @@
  */
 
 #include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
 #include <OneWire.h> 
 #include <DallasTemperature.h>
+#include <mDNSResolver.h>
 
 // WiFi configuration
 #define WIFI_SSID      "ssid"
@@ -15,7 +17,7 @@
 #define LISTEN_PORT   9000
 
 // Thermostat registration
-#define THERMOSTAT_HOST   "192.168.0.250"
+#define THERMOSTAT_HOST   "thermostat.local"
 #define THERMOSTAT_PORT   80
 #define THERMOSTAT_API    "/api/sensors/register"
 #define SENSOR_ID         "temp_bedroom"
@@ -24,6 +26,8 @@
 #define ONE_WIRE_BUS      D7  // GPIO13
 
 WiFiServer server(LISTEN_PORT);
+WiFiUDP udp;
+mDNSResolver::Resolver resolver(udp);
 
 // prepare a 1-Wire bus connection
 OneWire oneWire(ONE_WIRE_BUS); 
@@ -57,13 +61,32 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
 
+  resolver.setLocalIP(WiFi.localIP());
+
+  // Sensor will reply at SENSOR_ID.local
+  if (!MDNS.begin(SENSOR_ID)) {
+    Serial.println("Error setting up MDNS responder!");
+  }
+  Serial.println("mDNS responder started");
+
+  Serial.println("Searching for thermostat...");
+  IPAddress ip = resolver.search(THERMOSTAT_HOST);
+    if(ip != INADDR_NONE) {
+      Serial.print("Found thermostat: ");
+      Serial.println(ip);
+    } else {
+      Serial.println("Thermostat not found!");
+  }
+
+  String localhost = String(SENSOR_ID) + ".local";
+
   // Register to the thermostat
   Serial.print("Registering to thermostat at ");
-  Serial.print(THERMOSTAT_HOST);
+  Serial.print(ip);
   Serial.print(":");
   Serial.print(THERMOSTAT_PORT);
   Serial.print("...");
-  if (registerSelf(WiFi.localIP().toString() + ":" + LISTEN_PORT)) {
+  if (registerSelf(ip, THERMOSTAT_PORT, localhost + ":" + LISTEN_PORT)) {
     Serial.println(" registered!");
   }
   else {
@@ -77,7 +100,7 @@ void setup() {
   // Print the IP address
   Serial.print("Use this URL to connect: ");
   Serial.print("http://");
-  Serial.print(WiFi.localIP());
+  Serial.print(localhost);
   Serial.print(":");
   Serial.print(LISTEN_PORT);
   Serial.println("/");
@@ -146,9 +169,9 @@ float readTemperature() {
   return sensors.getTempCByIndex(0);
 }
 
-bool registerSelf(String localhost) {
+bool registerSelf(IPAddress address, int port, String localhost) {
   WiFiClient client;
-  if (!client.connect(THERMOSTAT_HOST, THERMOSTAT_PORT)) {
+  if (!client.connect(address, port)) {
     Serial.println("connection to thermostat failed");
     return false;
   }
