@@ -22,6 +22,8 @@ Configure the sketch `remote-http-sensors.ino` by setting:
 * THERMOSTAT_API: path to the thermostat API endpoint
 * TEMP_SENSOR_ID: ID used by the temperature sensor to self-register to the thermostat
 
+> TODO explain LED usage
+
 Connect your ESP8266 device and upload the sketch using Arduino IDE.
 
 ## Sensors registration

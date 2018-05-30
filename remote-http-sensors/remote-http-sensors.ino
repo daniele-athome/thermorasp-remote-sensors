@@ -25,6 +25,10 @@
 // Sensor PIN
 #define ONE_WIRE_BUS      D7  // GPIO13
 
+#define LED_PWR           D3
+#define LED_WIFI          D2
+#define LED_REG           D1
+
 WiFiServer server(LISTEN_PORT);
 WiFiUDP udp;
 mDNSResolver::Resolver resolver(udp);
@@ -34,7 +38,11 @@ OneWire oneWire(ONE_WIRE_BUS);
 // prepare a Dallas temperature connection
 DallasTemperature sensors(&oneWire);
 
+// for getting VCC
+ADC_MODE(ADC_VCC);
+
 void setup() {
+  lightOn(LED_PWR);
   Serial.begin(115200);
   delay(10);
 
@@ -60,6 +68,8 @@ void setup() {
   }
   Serial.println("");
   Serial.println("WiFi connected");
+
+  lightOn(LED_WIFI);
 
   resolver.setLocalIP(WiFi.localIP());
 
@@ -88,6 +98,7 @@ void setup() {
   Serial.print("...");
   if (registerSelf(ip, THERMOSTAT_PORT, localhost + ":" + LISTEN_PORT)) {
     Serial.println(" registered!");
+    lightOn(LED_REG);
   }
   else {
     Serial.println(" failed!");
@@ -128,6 +139,9 @@ void loop() {
   if (request.indexOf("/temperature") != -1)  {
     responseTemperature(client);
   }
+  else if (request.indexOf("/status") != -1)  {
+    responseStatus(client);
+  }
   else {
     responseError(client);
   }
@@ -142,6 +156,15 @@ void responseError(WiFiClient client) {
   client.println("Content-Type: text/plain");
   client.println("");
   client.println("Bad request");
+}
+
+void responseStatus(WiFiClient client) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json");
+    client.println("");
+    client.print("{\"power\":");
+    client.print(readPower());
+    client.print("}");
 }
 
 void responseTemperature(WiFiClient client) {
@@ -167,6 +190,10 @@ void responseTemperature(WiFiClient client) {
 float readTemperature() {
   sensors.requestTemperatures();
   return sensors.getTempCByIndex(0);
+}
+
+float readPower() {
+  return (float) ESP.getVcc() / 1024;
 }
 
 bool registerSelf(IPAddress address, int port, String localhost) {
@@ -209,5 +236,15 @@ bool registerSelf(IPAddress address, int port, String localhost) {
   }
 
   return false;
+}
+
+void lightOn(int pin) {
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, HIGH);
+}
+
+void lightOff(int pin) {
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
 }
 
