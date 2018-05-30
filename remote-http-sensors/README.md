@@ -2,7 +2,7 @@ Remote HTTP sensors
 ===================
 
 Remote HTTP sensor firmwares for ESP8266 using Arduino. For now only
-temperature (via DS18S20 or similar sensor) is supported.
+temperature (via DS18B20 or similar sensor) is supported.
 
 ## Required libraries
 
@@ -22,11 +22,13 @@ Configure the sketch `remote-http-sensors.ino` by setting:
 * THERMOSTAT_API: path to the thermostat API endpoint
 * TEMP_SENSOR_ID: ID used by the temperature sensor to self-register to the thermostat
 
-Connect your ESP8266-based device and upload the sketch using Arduino IDE.
+Connect your ESP8266 device and upload the sketch using Arduino IDE.
 
 ## Sensors registration
 
 Sensors will register itself at the configured thermostat automatically.
+The temperature sensor will also declare itself in the mDNS network with the hostname
+`TEMP_SENSOR_ID.local`.
 
 ## Test the temperature sensor
 
