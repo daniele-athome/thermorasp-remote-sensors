@@ -3,6 +3,7 @@
  * @author Daniele Ricci
  */
 
+#include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <OneWire.h> 
@@ -17,10 +18,13 @@
 #define LISTEN_PORT   9000
 
 // Thermostat registration
-#define THERMOSTAT_HOST   "thermostat.local"
-#define THERMOSTAT_PORT   80
-#define THERMOSTAT_API    "/api/sensors/register"
-#define SENSOR_ID         "temp_bedroom"
+#define THERMOSTAT_HOST       "thermostat.local"
+#define THERMOSTAT_PORT       80
+#define THERMOSTAT_API_REG    "/api/sensors/register"
+#define THERMOSTAT_API_SEND   "/api/sensors/reading"
+#define SENSOR_ID             "temp_bedroom"
+#define SENSOR_PASSIVE        false
+#define SEND_INTERVAL         60e6
 
 // Sensor PIN
 #define ONE_WIRE_BUS      D7  // GPIO13
@@ -42,9 +46,13 @@ DallasTemperature sensors(&oneWire);
 ADC_MODE(ADC_VCC);
 
 void setup() {
+  // turn on power LED
   lightOn(LED_PWR);
+
+  // wait for serial to initialize
   Serial.begin(115200);
-  delay(10);
+  Serial.setTimeout(2000);
+  while (!Serial) { }
 
   Serial.println();
   Serial.println();
@@ -57,28 +65,9 @@ void setup() {
   sensors.begin(); 
 
   // Connect to WiFi network
-  Serial.print("Connecting to ");
-  Serial.println(WIFI_SSID);
- 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
- 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  connect();
 
-  lightOn(LED_WIFI);
-
-  resolver.setLocalIP(WiFi.localIP());
-
-  // Sensor will reply at SENSOR_ID.local
-  if (!MDNS.begin(SENSOR_ID)) {
-    Serial.println("Error setting up MDNS responder!");
-  }
-  Serial.println("mDNS responder started");
-
+  // Look for thermostat
   Serial.println("Searching for thermostat...");
   IPAddress ip = resolver.search(THERMOSTAT_HOST);
     if(ip != INADDR_NONE) {
@@ -88,6 +77,7 @@ void setup() {
       Serial.println("Thermostat not found!");
   }
 
+#if SENSOR_PASSIVE
   String localhost = String(SENSOR_ID) + ".local";
 
   // Register to the thermostat
@@ -115,9 +105,38 @@ void setup() {
   Serial.print(":");
   Serial.print(LISTEN_PORT);
   Serial.println("/");
+#else
+  float temp = readTemperature();
+  Serial.print("Temperature: ");
+  Serial.println(temp);
+  if (temp == -127) {
+    Serial.println("Invalid reading, aborting.");
+  }
+  else {
+    Serial.println("Sending reading to thermostat");
+
+    HTTPClient http;
+    http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
+    http.addHeader("Content-Type", "application/json");
+
+    String message = String("{") +
+      "\"sensor_id\": \""+SENSOR_ID+"\","
+      "\"type\": \"temperature\"," +
+      "\"unit\": \"celsius\"," +
+      "\"value\": \""+temp+"\"}";
+
+    int httpCode = http.POST(message);
+    Serial.print("Thermostat replied with ");
+    Serial.println(httpCode);
+    http.end();
+  }
+
+  ESP.deepSleep(SEND_INTERVAL);
+#endif
 }
 
 void loop() {
+#if SENSOR_PASSIVE
   // Check if a client has connected
   WiFiClient client = server.available();
   if (!client) {
@@ -134,7 +153,7 @@ void loop() {
   String request = client.readStringUntil('\r');
   Serial.println(request);
   client.flush();
- 
+
   // Handle requests 
   if (request.indexOf("/temperature") != -1)  {
     responseTemperature(client);
@@ -149,6 +168,33 @@ void loop() {
   delay(1);
   Serial.println("Client disconnected");
   Serial.println("");
+#endif
+}
+
+void connect() {
+  Serial.print("Connecting to ");
+  Serial.println(WIFI_SSID);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  lightOn(LED_WIFI);
+
+  resolver.setLocalIP(WiFi.localIP());
+
+#if SENSOR_PASSIVE
+  // Sensor will reply at SENSOR_ID.local
+  if (!MDNS.begin(SENSOR_ID)) {
+    Serial.println("Error setting up MDNS responder!");
+  }
+  Serial.println("mDNS responder started");
+#endif
 }
 
 void responseError(WiFiClient client) {
@@ -203,14 +249,15 @@ bool registerSelf(IPAddress address, int port, String localhost) {
     return false;
   }
 
+  String sensor_mode = String(SENSOR_PASSIVE ? "passive" : "active");
   String message = String("{") +
-     "\"id\": \"temp_bedroom\"," +
+     "\"id\": \""+SENSOR_ID+"\"," +
      "\"type\": \"temperature\"," +
-     "\"data_mode\": \"passive\"," +
+     "\"data_mode\": \""+sensor_mode+"\"," +
      "\"protocol\": \"inet\"," +
      "\"address\": \"HTTP:http://" + localhost + "/temperature\"}";
 
-  client.println(String("POST ") + THERMOSTAT_API + " HTTP/1.1");
+  client.println(String("POST ") + THERMOSTAT_API_REG + " HTTP/1.1");
   client.println(String("Host: ") + THERMOSTAT_HOST);
   client.println("Content-type: application/json");
   client.println("Connection: close");
