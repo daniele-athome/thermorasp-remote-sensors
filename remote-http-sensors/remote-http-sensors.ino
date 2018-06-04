@@ -14,21 +14,25 @@
 #define WIFI_SSID      "ssid"
 #define WIFI_PASSWORD  "password"
 
-// HTTP listen port
+// HTTP listen port (passive mode only)
 #define LISTEN_PORT   9000
 
-// Thermostat registration
+// Thermostat configuration
 #define THERMOSTAT_HOST       "thermostat.local"
 #define THERMOSTAT_PORT       80
 #define THERMOSTAT_API_REG    "/api/sensors/register"
 #define THERMOSTAT_API_SEND   "/api/sensors/reading"
+
+// Sensor configuration
 #define SENSOR_ID             "temp_bedroom"
 #define SENSOR_PASSIVE        false
+// Data send interval (active mode only)
 #define SEND_INTERVAL         60e6
 
-// Sensor PIN
+// Sensor pin
 #define ONE_WIRE_BUS      D7  // GPIO13
 
+// LED pins
 #define LED_PWR           D3
 #define LED_WIFI          D2
 #define LED_REG           D1

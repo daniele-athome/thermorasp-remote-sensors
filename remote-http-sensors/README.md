@@ -14,13 +14,15 @@ temperature (via DS18B20 or similar sensor) is supported.
 
 Configure the sketch `remote-http-sensors.ino` by setting:
 
-* WIFI_SSID: SSID of your WiFi network
-* WIFI_PASSWORD: password of your WiFi network
-* LISTEN_PORT: HTTP listen port
-* THERMOSTAT_HOST: thermostat host
-* THERMOSTAT_PORT: thermostat port
-* THERMOSTAT_API: path to the thermostat API endpoint
-* TEMP_SENSOR_ID: ID used by the temperature sensor to self-register to the thermostat
+* `WIFI_SSID`: SSID of your WiFi network
+* `WIFI_PASSWORD`: password of your WiFi network
+* `LISTEN_PORT`: HTTP listen port
+* `THERMOSTAT_HOST`: thermostat host
+* `THERMOSTAT_PORT`: thermostat port
+* `THERMOSTAT_API`: path to the thermostat API endpoint
+* `TEMP_SENSOR_ID`: ID used by the temperature sensor to self-register to the thermostat
+* `SENSOR_PASSIVE`: true to make the thermostat poll the sensor for data. It will need more energy
+* `SEND_INTERVAL`: if sensor is used in active mode, specify the interval in seconds in the form `SSe6` 
 
 > TODO explain LED usage
 
