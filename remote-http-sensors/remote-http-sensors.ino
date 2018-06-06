@@ -27,7 +27,7 @@
 #define SENSOR_ID             "temp_bedroom"
 #define SENSOR_PASSIVE        false
 // Data send interval (active mode only)
-#define SEND_INTERVAL         60e6
+#define SEND_INTERVAL         600e6
 
 // Sensor pin
 #define ONE_WIRE_BUS      D7  // GPIO13
@@ -36,6 +36,8 @@
 #define LED_PWR           D3
 #define LED_WIFI          D2
 #define LED_REG           D1
+
+#define DEBUG             false 
 
 WiFiServer server(LISTEN_PORT);
 WiFiUDP udp;
@@ -53,14 +55,16 @@ void setup() {
   // turn on power LED
   lightOn(LED_PWR);
 
+#if DEBUG
   // wait for serial to initialize
   Serial.begin(115200);
   Serial.setTimeout(2000);
-  while (!Serial) { }
+  while (!Serial) { delay(500); }
 
   Serial.println();
   Serial.println();
   Serial.println("Initializing sensors");
+#endif
 
   digitalWrite(ONE_WIRE_BUS, HIGH);
   pinMode(ONE_WIRE_BUS, INPUT_PULLUP); // Mandatory to make it work on ESP8266
@@ -72,34 +76,34 @@ void setup() {
   connect();
 
   // Look for thermostat
-  Serial.println("Searching for thermostat...");
-  IPAddress ip = resolver.search(THERMOSTAT_HOST);
-    if(ip != INADDR_NONE) {
-      Serial.print("Found thermostat: ");
-      Serial.println(ip);
-    } else {
-      Serial.println("Thermostat not found!");
-  }
+  IPAddress ip = searchThermostat(THERMOSTAT_HOST);
 
 #if SENSOR_PASSIVE
   String localhost = String(SENSOR_ID) + ".local";
 
   // Register to the thermostat
+#if DEBUG
   Serial.print("Registering to thermostat at ");
   Serial.print(ip);
   Serial.print(":");
   Serial.print(THERMOSTAT_PORT);
   Serial.print("...");
+#endif
   if (registerSelf(ip, THERMOSTAT_PORT, localhost + ":" + LISTEN_PORT)) {
+#if DEBUG
     Serial.println(" registered!");
+#endif
     lightOn(LED_REG);
   }
   else {
+#if DEBUG
     Serial.println(" failed!");
+#endif
   }
 
   // Start the server
   server.begin();
+#if DEBUG
   Serial.println("Server started");
  
   // Print the IP address
@@ -109,29 +113,62 @@ void setup() {
   Serial.print(":");
   Serial.print(LISTEN_PORT);
   Serial.println("/");
+#endif
 #else
   float temp = readTemperature();
+#if DEBUG
   Serial.print("Temperature: ");
   Serial.println(temp);
+#endif
   if (temp == -127) {
+#if DEBUG
     Serial.println("Invalid reading, aborting.");
+#endif
   }
   else {
+#if DEBUG
     Serial.println("Sending reading to thermostat");
+#endif
 
     HTTPClient http;
+    String message;
+    int httpCode;
+
     http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
     http.addHeader("Content-Type", "application/json");
 
-    String message = String("{") +
+    message = String("{") +
       "\"sensor_id\": \""+SENSOR_ID+"\","
       "\"type\": \"temperature\"," +
       "\"unit\": \"celsius\"," +
       "\"value\": \""+temp+"\"}";
+    Serial.println(message);
 
-    int httpCode = http.POST(message);
+    httpCode = http.POST(message);
+#if DEBUG
     Serial.print("Thermostat replied with ");
     Serial.println(httpCode);
+#endif
+    http.end();
+
+#if DEBUG
+    Serial.println("Sending status to thermostat");
+#endif
+    http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
+    http.addHeader("Content-Type", "application/json");
+
+    message = String("{") +
+      "\"sensor_id\": \""+SENSOR_ID+"\","
+      "\"type\": \"power\"," +
+      "\"unit\": \"volt\"," +
+      "\"value\": \""+readPower()+"\"}";
+    Serial.println(message);
+
+    httpCode = http.POST(message);
+#if DEBUG
+    Serial.print("Thermostat replied with ");
+    Serial.println(httpCode);
+#endif
     http.end();
   }
 
@@ -148,7 +185,9 @@ void loop() {
   }
  
   // Wait until the client sends some data
+#if DEBUG
   Serial.println("new client");
+#endif
   while(!client.available()){
     delay(1);
   }
@@ -170,23 +209,31 @@ void loop() {
   }
 
   delay(1);
+#if DEBUG
   Serial.println("Client disconnected");
   Serial.println("");
+#endif
 #endif
 }
 
 void connect() {
+#if DEBUG
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
+#endif
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+#if DEBUG
     Serial.print(".");
+#endif
   }
+#if DEBUG
   Serial.println("");
   Serial.println("WiFi connected");
+#endif
 
   lightOn(LED_WIFI);
 
@@ -195,10 +242,30 @@ void connect() {
 #if SENSOR_PASSIVE
   // Sensor will reply at SENSOR_ID.local
   if (!MDNS.begin(SENSOR_ID)) {
+#if DEBUG
     Serial.println("Error setting up MDNS responder!");
+#endif
   }
+#if DEBUG
   Serial.println("mDNS responder started");
 #endif
+#endif
+}
+
+IPAddress searchThermostat(const char* host) {
+  #if DEBUG
+  Serial.println("Searching for thermostat...");
+#endif
+  IPAddress ip = resolver.search(host);
+#if DEBUG
+  if(ip != INADDR_NONE) {
+    Serial.print("Found thermostat: ");
+    Serial.println(ip);
+  } else {
+    Serial.println("Thermostat not found!");
+  }
+#endif
+  return ip;
 }
 
 void responseError(WiFiClient client) {
@@ -219,8 +286,10 @@ void responseStatus(WiFiClient client) {
 
 void responseTemperature(WiFiClient client) {
   float temp = readTemperature();
+#if DEBUG
   Serial.print("Temperature: ");
   Serial.println(temp);
+#endif
   if (temp == -127) {
   client.println("HTTP/1.1 500 Internal Server Error");
   client.println("Content-Type: text/plain");
@@ -249,7 +318,9 @@ float readPower() {
 bool registerSelf(IPAddress address, int port, String localhost) {
   WiFiClient client;
   if (!client.connect(address, port)) {
+#if DEBUG
     Serial.println("connection to thermostat failed");
+#endif
     return false;
   }
 
@@ -272,7 +343,9 @@ bool registerSelf(IPAddress address, int port, String localhost) {
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 5000) {
+#if DEBUG
       Serial.println(">>> Client Timeout !");
+#endif
       client.stop();
       return false;
     }
@@ -283,19 +356,25 @@ bool registerSelf(IPAddress address, int port, String localhost) {
     if (line.indexOf("HTTP/1.1 201") != -1) {
       return true;
     }
+#if DEBUG
     Serial.print(line);
+#endif
   }
 
   return false;
 }
 
 void lightOn(int pin) {
+#if DEBUG
   pinMode(pin, OUTPUT);
   digitalWrite(pin, HIGH);
+#endif
 }
 
 void lightOff(int pin) {
+#if DEBUG
   pinMode(pin, OUTPUT);
   digitalWrite(pin, LOW);
+#endif
 }
 
