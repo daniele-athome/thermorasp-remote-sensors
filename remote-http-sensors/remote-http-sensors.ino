@@ -52,6 +52,11 @@ DallasTemperature sensors(&oneWire);
 ADC_MODE(ADC_VCC);
 
 void setup() {
+  // Disable WiFi antenna until we are ready for it
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  delay(1);
+
   // turn on power LED
   lightOn(LED_PWR);
 
@@ -71,6 +76,21 @@ void setup() {
 
   // init sensors
   sensors.begin(); 
+
+#if !SENSOR_PASSIVE
+  float temp = readTemperature();
+  float pwr = readPower();
+#if DEBUG
+  Serial.print("Temperature: ");
+  Serial.println(temp);
+#endif
+  if (temp == -127) {
+#if DEBUG
+    Serial.println("Invalid reading, aborting.");
+#endif
+    finish();
+  }
+#endif
 
   // Connect to WiFi network
   connect();
@@ -115,64 +135,51 @@ void setup() {
   Serial.println("/");
 #endif
 #else
-  float temp = readTemperature();
 #if DEBUG
-  Serial.print("Temperature: ");
-  Serial.println(temp);
+  Serial.println("Sending reading to thermostat");
 #endif
-  if (temp == -127) {
+  HTTPClient http;
+  String message;
+  int httpCode;
+
+  http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
+  http.addHeader("Content-Type", "application/json");
+
+  message = String("{") +
+    "\"sensor_id\": \""+SENSOR_ID+"\","
+    "\"type\": \"temperature\"," +
+    "\"unit\": \"celsius\"," +
+    "\"value\": \""+temp+"\"}";
+  Serial.println(message);
+
+  httpCode = http.POST(message);
 #if DEBUG
-    Serial.println("Invalid reading, aborting.");
+  Serial.print("Thermostat replied with ");
+  Serial.println(httpCode);
 #endif
-  }
-  else {
-#if DEBUG
-    Serial.println("Sending reading to thermostat");
-#endif
-
-    HTTPClient http;
-    String message;
-    int httpCode;
-
-    http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
-    http.addHeader("Content-Type", "application/json");
-
-    message = String("{") +
-      "\"sensor_id\": \""+SENSOR_ID+"\","
-      "\"type\": \"temperature\"," +
-      "\"unit\": \"celsius\"," +
-      "\"value\": \""+temp+"\"}";
-    Serial.println(message);
-
-    httpCode = http.POST(message);
-#if DEBUG
-    Serial.print("Thermostat replied with ");
-    Serial.println(httpCode);
-#endif
-    http.end();
+  http.end();
 
 #if DEBUG
-    Serial.println("Sending status to thermostat");
+  Serial.println("Sending status to thermostat");
 #endif
-    http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
-    http.addHeader("Content-Type", "application/json");
+  http.begin("http://" + ip.toString() + ":" + THERMOSTAT_PORT + THERMOSTAT_API_SEND);
+  http.addHeader("Content-Type", "application/json");
 
-    message = String("{") +
-      "\"sensor_id\": \""+SENSOR_ID+"\","
-      "\"type\": \"power\"," +
-      "\"unit\": \"volt\"," +
-      "\"value\": \""+readPower()+"\"}";
-    Serial.println(message);
+  message = String("{") +
+    "\"sensor_id\": \""+SENSOR_ID+"\","
+    "\"type\": \"power\"," +
+    "\"unit\": \"volt\"," +
+    "\"value\": \""+pwr+"\"}";
+  Serial.println(message);
 
-    httpCode = http.POST(message);
+  httpCode = http.POST(message);
 #if DEBUG
-    Serial.print("Thermostat replied with ");
-    Serial.println(httpCode);
+  Serial.print("Thermostat replied with ");
+  Serial.println(httpCode);
 #endif
-    http.end();
-  }
+  http.end();
 
-  ESP.deepSleep(SEND_INTERVAL);
+  finish();
 #endif
 }
 
@@ -216,12 +223,26 @@ void loop() {
 #endif
 }
 
+#if !SENSOR_PASSIVE
+void finish() {
+  // Disconnect from WiFi
+  WiFi.disconnect(true);
+  delay(1);
+  // WAKE_RF_DISABLED to keep the WiFi radio disabled when we wake up
+  ESP.deepSleep(SEND_INTERVAL, WAKE_RF_DISABLED);
+}
+#endif
+
 void connect() {
 #if DEBUG
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
 #endif
 
+  WiFi.forceSleepWake();
+  delay(1);
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   while (WiFi.status() != WL_CONNECTED) {
