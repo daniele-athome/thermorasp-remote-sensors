@@ -78,6 +78,8 @@ void setup() {
   sensors.begin(); 
 
 #if !SENSOR_PASSIVE
+  // Give time to the sensor to settle
+  delay(1500);
   float temp = readTemperature();
   float pwr = readPower();
 #if DEBUG
