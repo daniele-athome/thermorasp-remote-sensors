@@ -30,8 +30,8 @@ Connect your ESP8266 device and upload the sketch using Arduino IDE.
 
 You will need to add the sensor previously through the thermostat web interface. Use these parameters:
 
-* ID: same as TEMP_SENSOR_ID
+* ID: same as TEMP\_SENSOR\_ID
 * Protocol: `local`
-* Address: `MQTT-LOCAL:`
+* Address: `MQTT-REMOTE:`
 * Type: `temperature`
 * Icon: [choose an icon from FontAwesome](https://fontawesome.com/icons) and use only the icon name without any prefix
