@@ -115,7 +115,7 @@ void setup() {
 
   String temp_payload = String("{") +
     "\"type\":\"temperature\"," +
-    "\"validity\":" + int(SEND_INTERVAL/1000000) +"," +
+    "\"validity\":" + (int(SEND_INTERVAL/1000000)+300) +"," +
     "\"unit\":\"celsius\"," +
     "\"value\":"+temp+"}";
 
